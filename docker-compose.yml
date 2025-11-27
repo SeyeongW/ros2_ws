@@ -17,8 +17,9 @@ services:
       - "dialout"
 
     command: >
-      bash -c "source /ros2_ws/install/setup.bash &&
-      ros2 launch vtol_mission takeoff.launch.py
-        fcu_url:=/dev/serial0:57600
-        system_id:=255
-        component_id:=240"
+     bash -c "source /opt/ros/humble/setup.bash &&
+     source /ros2_ws/install/setup.bash &&
+     ros2 launch vtol_mission takeoff.launch.py \
+     fcu_url:=/dev/serial0:57600 \
+     system_id:=255 \
+     component_id:=240"
