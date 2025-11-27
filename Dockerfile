@@ -14,12 +14,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Python libs
-RUN pip3 install flask opencv-contrib-python transforms3d
+RUN pip3 install flask opencv-contrib-python transforms3d "numpy<2.0"
 
-# rosdep 초기화 (필요하면 나중에 주석처리 가능)
 RUN rosdep update || true
 
-# MAVROS에서 요구하는 geographiclib 데이터셋 설치
 RUN /opt/ros/humble/lib/mavros/install_geographiclib_datasets.sh || true
 
 WORKDIR /ros2_ws
