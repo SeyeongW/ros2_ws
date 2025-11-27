@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64 ros:humble-ros-base-jammy
+FROM ros:humble-ros-base-jammy
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
@@ -22,7 +22,7 @@ RUN /opt/ros/humble/lib/mavros/install_geographiclib_datasets.sh
 WORKDIR /ros2_ws
 
 # 소스 복사
-COPY ./vtol_mission /ros2_ws/src/vtol_mission
+COPY ./src/vtol_mission /ros2_ws/src/vtol_mission
 
 # 빌드
 SHELL ["/bin/bash", "-c"]
