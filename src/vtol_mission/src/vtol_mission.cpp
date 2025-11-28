@@ -41,7 +41,7 @@ public:
             "/mavros/mavros/arming");         
 
         set_mode_client_ = this->create_client<mavros_msgs::srv::SetMode>(
-            "/mavros/mavros/set_mode");       
+            "/mavros/set_mode");       
 
         // --- Timer ---
         timer_ = this->create_wall_timer(
