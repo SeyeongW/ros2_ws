@@ -1,24 +1,49 @@
+from camera import SiyiGimbal
 import time
-from camera import SiyiGimbal  # ← 네 파일 이름으로 수정
+import sys
+import tty
+import termios
 
-g = SiyiGimbal(debug=True)   # 디버깅 로그 출력됨
-time.sleep(0.5)
+def getch():
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    return ch
 
-print("Setting LOCK MODE...")
-g.set_lock_mode()
-time.sleep(1.0)
+def main():
+    gimbal = SiyiGimbal()
 
-print("Yaw Right")
-g.send_speed(30, 0)
-time.sleep(1)
+    print(">>> Sending gimbal to LOCK MODE...")
+    gimbal.set_lock_mode()
 
-print("Stop")
-g.send_speed(0, 0)
-time.sleep(0.5)
+    print("Press: a/d = Yaw Left/Right,  w/s = Pitch Up/Down, q = Quit")
 
-print("Yaw Left")
-g.send_speed(-30, 0)
-time.sleep(1)
+    while True:
+        key = getch()
 
-print("Stop")
-g.send_speed(0, 0)
+        yaw = 0
+        pitch = 0
+
+        if key == "a":
+            yaw = -20
+        elif key == "d":
+            yaw = 20
+        elif key == "w":
+            pitch = -20
+        elif key == "s":
+            pitch = 20
+        elif key == "q":
+            print("Quit.")
+            break
+
+        print(f"Yaw: {yaw}, Pitch: {pitch}")
+        gimbal.send_speed(yaw, pitch)
+
+        time.sleep(0.1)
+
+if __name__ == "__main__":
+    main()
