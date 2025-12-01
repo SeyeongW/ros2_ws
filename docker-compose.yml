@@ -27,19 +27,20 @@ services:
     network_mode: "host"
     privileged: true
     
-    # [환경 변수] 도커가 호스트의 파일들을 내 것처럼 인식하게 설정
+    # [환경 변수]
     environment:
-      # GStreamer 플러그인 위치 (호스트에서 가져온 경로)
-      - GST_PLUGIN_PATH=/hailo_plugins
-      # 시스템 라이브러리 위치
-      - LD_LIBRARY_PATH=/host_libs:/usr/lib/aarch64-linux-gnu:/usr/lib
-      # [추가됨] 파이썬 라이브러리 위치 (호스트의 hailo 패키지를 참조)
-      - PYTHONPATH=/usr/lib/python3/dist-packages:/usr/local/lib/python3/dist-packages
+      # GStreamer 플러그인 위치 지정
+      - GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
+      # 라이브러리 경로 지정
+      - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/lib
+      # 파이썬 패키지 경로 지정
+      - PYTHONPATH=/usr/lib/python3/dist-packages
 
     devices:
       - "/dev/hailo0:/dev/hailo0"
     
-    # [볼륨 마운트] 호스트의 핵심 파일들을 도커에게 공유
+    # [핵심 수정: 볼륨 마운트]
+    # 폴더 전체를 마운트하지 않고, 필요한 파일만 개별적으로 마운트하여 충돌 방지
     volumes:
       - /dev:/dev
       
@@ -47,16 +48,19 @@ services:
       - /home/sw/hailo-rpi5-examples:/hailo_ws
       - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
       
-      # (2) GStreamer 플러그인 (버전 문제 해결용)
-      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0:/hailo_plugins
+      # (2) GStreamer Hailo 플러그인 (파일만 쏙 가져오기)
+      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so:/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so
+      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so:/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so
 
-      # (3) 시스템 라이브러리 (libhailort.so 등)
-      - /usr/lib/aarch64-linux-gnu:/host_libs
+      # (3) Hailo 런타임 라이브러리 (파일만 쏙 가져오기)
+      # 주의: 파일명 버전(4.17.0)은 라즈베리파이 설치 버전에 따라 다를 수 있으니 확인 필요
+      - /usr/lib/aarch64-linux-gnu/libhailort.so.4.17.0:/usr/lib/aarch64-linux-gnu/libhailort.so.4.17.0
+      # 심볼릭 링크 연결 (도커가 libhailort.so를 찾을 때 위 파일을 보게 함)
+      - /usr/lib/aarch64-linux-gnu/libhailort.so.4.17.0:/usr/lib/aarch64-linux-gnu/libhailort.so
 
-      # (4) [핵심] 호스트에 설치된 'hailo-all' 파이썬 패키지 공유
-      # 이것 덕분에 pip install 없이도 import hailo가 가능해집니다.
-      - /usr/lib/python3/dist-packages:/usr/lib/python3/dist-packages
-      - /usr/local/lib/python3/dist-packages:/usr/local/lib/python3/dist-packages
+      # (4) 파이썬 패키지 (이건 폴더째로 가져와도 안전함)
+      - /usr/lib/python3/dist-packages/hailort:/usr/lib/python3/dist-packages/hailort
+      - /usr/lib/python3/dist-packages/hailo_platform:/usr/lib/python3/dist-packages/hailo_platform
 
     command: python3 /root/ws/siyi_pose_node.py
 
