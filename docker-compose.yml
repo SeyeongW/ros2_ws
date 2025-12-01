@@ -26,15 +26,15 @@ services:
     restart: unless-stopped
     network_mode: "host"
     privileged: true
-    
-    # 하드웨어 및 파일 연결
     devices:
       - "/dev/hailo0:/dev/hailo0"
+    
     volumes:
       - /dev:/dev
-      # (중요 1) Hailo 모델 파일 연결
       - /home/sw/hailo-rpi5-examples:/hailo_ws
-      # (중요 2) 개발 꿀팁: 코드를 수정하면 빌드 없이 바로 반영되게 연결!
       - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
-    
+      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so:/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so
+      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so:/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so
+      - /usr/lib/aarch64-linux-gnu/libhailort.so:/usr/lib/aarch64-linux-gnu/libhailort.so.4.17.0
+
     command: python3 /root/ws/siyi_pose_node.py

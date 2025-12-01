@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Python 라이브러리 (Hailo, Numpy)
-RUN pip3 install --no-cache-dir hailort numpy setuptools
+RUN pip3 install --no-cache-dir numpy setuptools
 
 WORKDIR /root/ws
 
