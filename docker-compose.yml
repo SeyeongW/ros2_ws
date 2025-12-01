@@ -28,9 +28,8 @@ services:
     privileged: true
     
     environment:
-      # GStreamer가 플러그인을 찾을 경로 (도커 내부 경로)
+      # 플러그인 경로 명시
       - GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
-      # 라이브러리 경로
       - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/lib
 
     devices:
@@ -42,38 +41,40 @@ services:
       - /home/sw/hailo-rpi5-examples:/hailo_ws
       - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
       
-      # (2) 호스트 시스템 폴더 마운트 (탐색용, 읽기 전용)
-      - /usr/lib:/host_usr_lib:ro
-      - /usr/local/lib:/host_local_lib:ro
+      # (2) [핵심] 시스템 라이브러리 폴더를 직접 타겟팅해서 마운트
+      # 이제 /usr/lib 전체를 뒤지지 않고, 여기가 바로 '그 폴더'입니다.
+      - /usr/lib/aarch64-linux-gnu:/host_libs:ro
 
-    # [핵심] find 명령어로 파일 위치를 스스로 찾아서 복사하도록 개선
+    # [핵심] 복잡한 find 대신 직관적인 cp 명령어 사용
     command: >
       bash -c "
-      echo 'Step 1: Cleaning GStreamer Cache...' &&
+      echo 'Step 1: Cleaning Cache...' &&
       rm -rf /root/.cache/gstreamer-1.0 &&
       
-      echo 'Step 2: Searching and copying Hailo libraries...' &&
+      echo 'Step 2: Copying Hailo Libraries (Direct Copy)...' &&
+      # 폴더가 없으면 만들고
+      mkdir -p /usr/lib/aarch64-linux-gnu/gstreamer-1.0 &&
       
-      # 1. 런타임 라이브러리 복사 (hailort, meta, tracker) - 문법 오류 없는 cp -t 사용
-      find /host_usr_lib /host_local_lib -name 'libhailort.so*' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/ {} + &&
-      find /host_usr_lib /host_local_lib -name 'libgsthailometa.so*' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/ {} + &&
-      find /host_usr_lib /host_local_lib -name 'libhailo_tracker.so*' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/ {} + &&
+      # 1. 핵심 라이브러리 복사 (경로가 확실하므로 바로 복사)
+      cp -fpv /host_libs/libhailort.so* /usr/lib/aarch64-linux-gnu/ &&
+      cp -fpv /host_libs/libgsthailometa.so* /usr/lib/aarch64-linux-gnu/ &&
+      # 트래커는 없을 수도 있으니 에러 무시 (|| true)
+      cp -fpv /host_libs/libhailo_tracker.so* /usr/lib/aarch64-linux-gnu/ || true &&
       
-      # 2. GStreamer 플러그인 복사 (libgsthailo.so)
-      find /host_usr_lib /host_local_lib -name 'libgsthailo.so' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ {} + &&
-      find /host_usr_lib /host_local_lib -name 'libgsthailotools.so' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ {} + &&
+      # 2. GStreamer 플러그인 복사
+      cp -fpv /host_libs/gstreamer-1.0/libgsthailo.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
+      cp -fpv /host_libs/gstreamer-1.0/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
       
-      echo 'Step 3: Creating symlinks for 4.20.0 compatibility...' &&
-      # 4.20.0 버전이 없을 경우를 대비해 심볼릭 링크 생성 (있으면 덮어씀)
+      echo 'Step 3: Creating Version Symlinks...' &&
+      # 4.20.0 버전이 없을 경우를 대비해 억지로라도 링크 생성
       ln -sf /usr/lib/aarch64-linux-gnu/libhailort.so /usr/lib/aarch64-linux-gnu/libhailort.so.4.20.0 &&
       ldconfig &&
       
-      echo 'Step 4: Verifying Plugin...' &&
+      echo 'Step 4: Debugging...' &&
+      # 만약 블랙리스트에 올랐다면 왜 그런지 확인
+      gst-inspect-1.0 -b &&
       gst-inspect-1.0 hailonet && 
       
       echo 'Step 5: Starting Node...' &&
       python3 /root/ws/siyi_pose_node.py
       "
-
-#cd ~/ros2_ws
-#docker compose up --build siyi_vision
