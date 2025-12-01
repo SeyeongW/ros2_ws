@@ -27,20 +27,14 @@ services:
     network_mode: "host"
     privileged: true
     
-    # [환경 변수]
     environment:
-      # GStreamer 플러그인 위치 지정
       - GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
-      # 라이브러리 경로 지정
       - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/lib
-      # 파이썬 패키지 경로 지정
       - PYTHONPATH=/usr/lib/python3/dist-packages
 
     devices:
       - "/dev/hailo0:/dev/hailo0"
     
-    # [핵심 수정: 볼륨 마운트]
-    # 폴더 전체를 마운트하지 않고, 필요한 파일만 개별적으로 마운트하여 충돌 방지
     volumes:
       - /dev:/dev
       
@@ -48,22 +42,32 @@ services:
       - /home/sw/hailo-rpi5-examples:/hailo_ws
       - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
       
-      # (2) GStreamer Hailo 플러그인 (파일만 쏙 가져오기)
+      # (2) GStreamer 플러그인
       - /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so:/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so
       - /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so:/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so
 
-      # (3) Hailo 런타임 라이브러리 (파일만 쏙 가져오기)
-      # 주의: 파일명 버전(4.17.0)은 라즈베리파이 설치 버전에 따라 다를 수 있으니 확인 필요
-      - /usr/lib/aarch64-linux-gnu/libhailort.so.4.17.0:/usr/lib/aarch64-linux-gnu/libhailort.so.4.17.0
-      # 심볼릭 링크 연결 (도커가 libhailort.so를 찾을 때 위 파일을 보게 함)
+      # (3) [핵심 수정] 런타임 라이브러리 (버전 속이기!)
+      # 호스트의 4.17.0 파일을 -> 도커에게는 4.20.0 이라고 거짓말하고 넣어줍니다.
+      - /usr/lib/aarch64-linux-gnu/libhailort.so.4.17.0:/usr/lib/aarch64-linux-gnu/libhailort.so.4.20.0
+      # 심볼릭 링크도 연결
       - /usr/lib/aarch64-linux-gnu/libhailort.so.4.17.0:/usr/lib/aarch64-linux-gnu/libhailort.so
 
-      # (4) 파이썬 패키지 (이건 폴더째로 가져와도 안전함)
+      # (4) [추가됨] 메타 라이브러리 (사용자가 찾은 파일)
+      # 호스트의 3.31.0 파일을 -> 도커에게는 필요한 이름(.so.3)으로 넣어줍니다.
+      - /usr/lib/aarch64-linux-gnu/libgsthailometa.so.3.31.0:/usr/lib/aarch64-linux-gnu/libgsthailometa.so.3
+      - /usr/lib/aarch64-linux-gnu/libgsthailometa.so.3.31.0:/usr/lib/aarch64-linux-gnu/libgsthailometa.so
+
+      # (5) 파이썬 패키지
       - /usr/lib/python3/dist-packages/hailort:/usr/lib/python3/dist-packages/hailort
       - /usr/lib/python3/dist-packages/hailo_platform:/usr/lib/python3/dist-packages/hailo_platform
 
     command: python3 /root/ws/siyi_pose_node.py
+```
 
-### 🚀 실행 방법
-#cd ~/ros2_ws
-#docker compose up --build siyi_vision
+### 🚀 실행
+
+이제 **4.17.0** 파일을 **4.20.0**으로 인식하게 만들었으니 에러가 사라질 겁니다.
+
+```bash
+cd ~/ros2_ws
+docker compose up --build siyi_vision
