@@ -28,7 +28,6 @@ services:
     privileged: true
     
     environment:
-      # [최종] 디버그 로그 끔 (조용하게 실행)
       - GST_DEBUG=0
       - GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
       - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/lib
@@ -38,14 +37,17 @@ services:
     
     volumes:
       - /dev:/dev
-      # (1) 모델 파일 원본 경로 (읽기 전용)
-      - /home/sw/hailo-rpi5-examples:/hailo_ws:ro
+      # (1) 코드 마운트
       - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
       
-      # (2) 시스템 라이브러리 경로 (통째로 마운트)
+      # (2) [핵심 수정] 심볼릭 링크 문제 해결!
+      # 폴더를 통째로 넘기지 말고, 호스트에 있는 파일을 도커의 /root/model.hef 위치에 직접 꽂습니다.
+      - /home/sw/hailo-rpi5-examples/resources/models/hailo8/yolov8m_pose.hef:/root/model.hef:ro
+      
+      # (3) 시스템 라이브러리 경로
       - /usr/lib:/host_usr_lib:ro
 
-    # [최종] 안정화된 실행 스크립트 (목록 출력 삭제)
+    # [실행 명령] 모델 찾기(find) 제거! 이미 /root/model.hef에 파일이 있으니까요.
     command:
       - bash
       - -c
@@ -53,44 +55,23 @@ services:
         set -e
 
         echo "--- Setting up Hailo Vision Node ---"
-        
-        # 1. GStreamer 캐시 정리 (꼬임 방지)
         rm -rf /root/.cache/gstreamer-1.0
 
-        echo "1. Copying Hailo Libraries..."
-        # 런타임 라이브러리 (호스트 /usr/lib)
+        echo "1. Copying Libraries..."
+        # 라이브러리 복사 (기존과 동일)
         cp -fp /host_usr_lib/libhailort.so* /usr/lib/aarch64-linux-gnu/
-        
-        # 의존성 라이브러리 (호스트 /usr/lib/aarch64-linux-gnu)
         cp -fp /host_usr_lib/aarch64-linux-gnu/libgsthailometa.so* /usr/lib/aarch64-linux-gnu/ || true
         cp -fp /host_usr_lib/aarch64-linux-gnu/libhailo_tracker.so* /usr/lib/aarch64-linux-gnu/ || true
-        
-        # GStreamer 플러그인
         cp -fp /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/
         cp -fp /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/
 
-        echo "2. Preparing AI Model..."
-        
-        # 파일 찾기 (이름을 좀 더 유연하게 검색: *pose*.hef)
-        FOUND_HEF=$$(find /hailo_ws -name "*pose*.hef" | head -n 1)
-        
-        if [ -z "$$FOUND_HEF" ]; then
-            echo "   [Retry] Searching for ANY .hef file..."
-            FOUND_HEF=$$(find /hailo_ws -name "*.hef" | head -n 1)
-        fi
-
-        if [ -z "$$FOUND_HEF" ]; then
-            echo "CRITICAL ERROR: No HEF file found in /hailo_ws!"
-            exit 1
-        fi
-        
-        echo "   Model found: $$FOUND_HEF"
-        cp "$$FOUND_HEF" /root/model.hef
-        chmod 644 /root/model.hef
-
-        echo "3. Refreshing System..."
+        echo "2. Refreshing System..."
         ldconfig
 
+        echo "3. Verifying Model File..."
+        # 파일이 잘 꽂혔는지 확인
+        ls -l /root/model.hef || (echo "CRITICAL: Model mount failed" && exit 1)
+
         echo "4. Starting ROS 2 Node..."
-        # 노드 실행
+        # 바로 실행
         python3 /root/ws/siyi_pose_node.py --ros-args -p hef_path:=/root/model.hef
