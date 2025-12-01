@@ -20,7 +20,7 @@ services:
   # 2. AI 영상 노드 (로컬 폴더 vision 빌드)
   siyi_vision:
     build:
-      context: ./vision
+      context: ./vision_project
     image: siyi_vision:local
     container_name: siyi_vision
     restart: unless-stopped
@@ -35,6 +35,6 @@ services:
       # (중요 1) Hailo 모델 파일 연결
       - /home/sw/hailo-rpi5-examples:/hailo_ws
       # (중요 2) 개발 꿀팁: 코드를 수정하면 빌드 없이 바로 반영되게 연결!
-      - ./vision/siyi_pose_node.py:/root/ws/siyi_pose_node.py
+      - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
     
     command: python3 /root/ws/siyi_pose_node.py
