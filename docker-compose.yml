@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # 1. 비행 제어 노드 (로컬 폴더 mission 빌드)
+  # 1. 비행 제어 노드 (기존 유지)
   vtol_mission:
     build:
       context: ./mission
@@ -13,11 +13,11 @@ services:
     devices:
       - "/dev/ttyAMA0:/dev/serial0"
     command: >
-     bash -c "source /opt/ros/humble/setup.bash &&
-     source /ros2_ws/install/setup.bash &&
-     ros2 launch vtol_mission takeoff.launch.py fcu_url:=/dev/serial0:57600 system_id:=255 component_id:=240"
+      bash -c "source /opt/ros/humble/setup.bash &&
+      source /ros2_ws/install/setup.bash &&
+      ros2 launch vtol_mission takeoff.launch.py fcu_url:=/dev/serial0:57600 system_id:=255 component_id:=240"
 
-  # 2. AI 영상 노드 (로컬 폴더 vision 빌드)
+  # 2. AI 영상 노드 (Hailo-8 Vision)
   siyi_vision:
     build:
       context: ./vision_project
@@ -27,24 +27,40 @@ services:
     network_mode: "host"
     privileged: true
     
-    # [핵심 변경 1] GStreamer와 라이브러리 경로를 알려주는 환경 변수
+    # [환경 변수] 도커가 호스트의 파일들을 내 것처럼 인식하게 설정
     environment:
-      # GStreamer가 플러그인을 찾을 폴더 지정
+      # GStreamer 플러그인 위치 (호스트에서 가져온 경로)
       - GST_PLUGIN_PATH=/hailo_plugins
-      # 시스템 라이브러리(hailort)를 찾을 폴더 지정
+      # 시스템 라이브러리 위치
       - LD_LIBRARY_PATH=/host_libs:/usr/lib/aarch64-linux-gnu:/usr/lib
+      # [추가됨] 파이썬 라이브러리 위치 (호스트의 hailo 패키지를 참조)
+      - PYTHONPATH=/usr/lib/python3/dist-packages:/usr/local/lib/python3/dist-packages
 
     devices:
       - "/dev/hailo0:/dev/hailo0"
     
+    # [볼륨 마운트] 호스트의 핵심 파일들을 도커에게 공유
     volumes:
       - /dev:/dev
       
+      # (1) 모델 파일 및 코드
       - /home/sw/hailo-rpi5-examples:/hailo_ws
       - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
       
+      # (2) GStreamer 플러그인 (버전 문제 해결용)
       - /usr/lib/aarch64-linux-gnu/gstreamer-1.0:/hailo_plugins
 
+      # (3) 시스템 라이브러리 (libhailort.so 등)
       - /usr/lib/aarch64-linux-gnu:/host_libs
 
+      # (4) [핵심] 호스트에 설치된 'hailo-all' 파이썬 패키지 공유
+      # 이것 덕분에 pip install 없이도 import hailo가 가능해집니다.
+      - /usr/lib/python3/dist-packages:/usr/lib/python3/dist-packages
+      - /usr/local/lib/python3/dist-packages:/usr/local/lib/python3/dist-packages
+
     command: python3 /root/ws/siyi_pose_node.py
+```
+
+### 🚀 실행 방법
+#cd ~/ros2_ws
+#docker compose up --build siyi_vision
