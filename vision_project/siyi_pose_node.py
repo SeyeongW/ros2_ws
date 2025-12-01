@@ -25,16 +25,12 @@ class SiyiHailoPoseNode(Node):
 
         # --- [1] 사용자 설정 (여기만 확인하세요) ---
         # 내 노트북(PC) IP 주소 (여기로 영상이 전송됩니다)
-        self.declare_parameter('pc_ip', '192.168.1.100') # <-- 내 노트북 IP로 변경 필수!
+        self.declare_parameter('pc_ip', '192.168.1.100') 
         self.declare_parameter('pc_port', 5000)
         
         # SIYI 카메라 주소 (기본값)
         self.declare_parameter('rtsp_url', 'rtsp://192.168.144.25:8554/main.264')
 
-        # --- [2] Hailo 경로 설정 (작성자님 파일 기준 완벽 수정됨) ---
-        # Docker 내부 경로 (/hailo_ws)를 기준으로 설정했습니다.
-        
-        # 모델 파일: yolov8m_pose.hef (Medium 모델, Hailo-8용)
         self.declare_parameter('hef_path', '/hailo_ws/resources/models/hailo8/yolov8m_pose.hef')
         
         # 후처리 파일: Pose 전용 라이브러리 사용

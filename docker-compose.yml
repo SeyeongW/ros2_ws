@@ -26,15 +26,25 @@ services:
     restart: unless-stopped
     network_mode: "host"
     privileged: true
+    
+    # [핵심 변경 1] GStreamer와 라이브러리 경로를 알려주는 환경 변수
+    environment:
+      # GStreamer가 플러그인을 찾을 폴더 지정
+      - GST_PLUGIN_PATH=/hailo_plugins
+      # 시스템 라이브러리(hailort)를 찾을 폴더 지정
+      - LD_LIBRARY_PATH=/host_libs:/usr/lib/aarch64-linux-gnu:/usr/lib
+
     devices:
       - "/dev/hailo0:/dev/hailo0"
     
     volumes:
       - /dev:/dev
+      
       - /home/sw/hailo-rpi5-examples:/hailo_ws
       - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
-      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so:/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so
-      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so:/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so
-      - /usr/lib/aarch64-linux-gnu/libhailort.so:/usr/lib/aarch64-linux-gnu/libhailort.so.4.17.0
+      
+      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0:/hailo_plugins
+
+      - /usr/lib/aarch64-linux-gnu:/host_libs
 
     command: python3 /root/ws/siyi_pose_node.py
