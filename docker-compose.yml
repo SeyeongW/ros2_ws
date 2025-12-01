@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # 1. 비행 제어 노드 (기존 유지)
+  # 1. 비행 제어 노드 (유지)
   vtol_mission:
     build:
       context: ./mission
@@ -29,12 +29,12 @@ services:
     
     environment:
       - GST_DEBUG=0
-      # 호스트의 GStreamer 플러그인을 사용
+      # [1] GStreamer 플러그인은 호스트에 있는 걸 씁니다.
       - GST_PLUGIN_PATH=/host_fs/usr/lib/aarch64-linux-gnu/gstreamer-1.0
       
-      # [핵심 수정] 라이브러리 우선순위 변경!
-      # 1순위: 도커 내부 시스템 경로 (/usr/lib/...) -> bash가 죽지 않게 함
-      # 2순위: 호스트 경로 (/host_fs/...) -> 없는 파일(Hailo/OpenCV)은 여기서 찾음
+      # [2] 라이브러리 로딩 순서 (이게 핵심입니다!)
+      # 1순위: 도커 내부 (/usr/lib...) -> bash, python 등이 안 죽게 함
+      # 2순위: 호스트 (/host_fs/...) -> 도커에 없는 OpenCV, Hailo 등을 여기서 찾음
       - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/lib/aarch64-linux-gnu:/usr/lib:/host_fs/usr/lib/aarch64-linux-gnu:/host_fs/usr/lib:/host_fs/lib/aarch64-linux-gnu
 
     devices:
@@ -47,31 +47,31 @@ services:
       - /home/sw/hailo-rpi5-examples/resources/models/hailo8/yolov8m_pose.hef:/root/model.hef:ro
       - /home/sw/hailo-rpi5-examples:/hailo_ws:ro
       
-      # (2) 호스트 시스템 폴더 마운트 (치트키)
+      # (2) 호스트 시스템 폴더 통째로 마운트 (이름: /host_fs)
+      # 이렇게 하면 OpenCV든 뭐든 호스트에 있는 건 다 가져올 수 있습니다.
       - /usr/lib:/host_fs/usr/lib:ro
       - /lib:/host_fs/lib:ro
 
-    # [실행 명령]
+    # [실행 명령] 복잡한 복사 없이 바로 실행
     command:
       - bash
       - -c
       - |
         set -e
-        echo "--- Setting up Hailo Vision Node (Host-Passthrough Mode v2) ---"
+        echo "--- Setting up Hailo Vision Node (Final Fix) ---"
         
         # 1. 모델 파일 확인
         if [ ! -f /root/model.hef ]; then
-            echo "CRITICAL: Model file not mounted at /root/model.hef!"
+            echo "CRITICAL: Model file not mounted!"
             exit 1
         fi
         
-        # 2. 링커 캐시 갱신
+        # 2. 링커 캐시 갱신 (호스트 라이브러리 인식)
         ldconfig
 
-        # 3. 플러그인 검사
+        # 3. 플러그인 검사 (이제 성공해야 함)
         echo "Inspecting Hailonet..."
-        # 이제 bash도 살고, 플러그인도 로딩될 것입니다.
-        gst-inspect-1.0 hailonet || echo "WARNING: Inspect failed, but trying execution anyway..."
+        gst-inspect-1.0 hailonet || echo "WARNING: Inspect reported issues, but trying anyway..."
 
         # 4. 실행
         echo "Starting Node..."
