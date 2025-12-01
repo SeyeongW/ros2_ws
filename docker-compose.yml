@@ -59,7 +59,6 @@ services:
       - /usr/local/lib/python3/dist-packages:/usr/local/lib/python3/dist-packages
 
     command: python3 /root/ws/siyi_pose_node.py
-```
 
 ### 🚀 실행 방법
 #cd ~/ros2_ws
