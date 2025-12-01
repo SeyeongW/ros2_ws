@@ -46,37 +46,59 @@ services:
       # (3) 시스템 라이브러리 경로 (복사용)
       - /usr/lib:/host_usr_lib:ro
 
-      # (4) [핵심] 후처리 라이브러리(.so) 사용을 위해 예제 폴더 전체 마운트
+      # (4) [핵심] 후처리 라이브러리(.so)가 있는 폴더 마운트
       - /home/sw/hailo-rpi5-examples:/hailo_ws:ro
 
-    # [핵심] 'hailo'가 이름에 들어간 모든 라이브러리를 싹쓸이 복사
+    # [핵심] 의존성 자동 해결 스크립트 적용
     command:
       - bash
       - -c
       - |
         set -e
 
-        echo "--- Setting up Hailo Vision Node ---"
+        echo "--- Setting up Hailo Vision Node (Auto-Fix Mode) ---"
         rm -rf /root/.cache/gstreamer-1.0
 
-        echo "1. Bulk Copying ALL Hailo Libraries..."
-        # 런타임, 메타, 트래커, 포스트프로세스 등등 다 가져옵니다.
-        # find 명령어로 /host_usr_lib 안의 모든 *hailo*.so* 파일을 찾아서 복사
+        # ---------------------------------------------------------
+        # 1. 기본 Hailo 라이브러리 복사
+        # ---------------------------------------------------------
+        echo "1. Copying Base Hailo Libraries..."
         find /host_usr_lib -name "*hailo*.so*" -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/ \;
-        
-        # GStreamer 플러그인도 확실하게 복사
         cp -fpv /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/
         cp -fpv /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/
 
-        echo "2. Refreshing System Linker..."
+        # ---------------------------------------------------------
+        # 2. 의존성 자동 치료 (Missing Libs Fixer)
+        # ---------------------------------------------------------
+        echo "2. Checking & Fixing Missing Dependencies..."
+        
+        # 검사 대상: GStreamer 플러그인 & 후처리 라이브러리
+        TARGET_LIBS="/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /hailo_ws/resources/so/libyolov8pose_postprocess.so"
+
+        for target in $TARGET_LIBS; do
+            if [ -f "$target" ]; then
+                echo "   Scanning $target..."
+                # ldd로 'not found'인 라이브러리 목록 추출
+                MISSING=$(ldd "$target" | grep "not found" | awk '{print $1}')
+                
+                for lib in $MISSING; do
+                    echo "   [FIX] Missing dependency found: $lib -> Searching host..."
+                    # 호스트에서 찾아서 복사 (심볼릭 링크 원본까지 복사하기 위해 -L 사용)
+                    find /host_usr_lib -name "$lib" -exec cp -Lnv {} /usr/lib/aarch64-linux-gnu/ \;
+                done
+            else
+                echo "   [WARN] Target $target not found inside container!"
+            fi
+        done
+
+        # ---------------------------------------------------------
+        # 3. 시스템 갱신 및 실행
+        # ---------------------------------------------------------
+        echo "3. Refreshing System Linker..."
         ldconfig
 
-        echo "3. Verifying Setup..."
+        echo "4. Verifying Setup..."
         ls -l /root/model.hef
         
-        # (중요) 후처리 파일이 잘 로딩되는지 확인
-        echo "   Checking Post-Process SO files..."
-        ls -l /hailo_ws/resources/so/libyolov8pose_postprocess.so || echo "WARNING: Post-process SO not found in /hailo_ws!"
-
-        echo "4. Starting ROS 2 Node..."
+        echo "5. Starting ROS 2 Node..."
         python3 /root/ws/siyi_pose_node.py --ros-args -p hef_path:=/root/model.hef
