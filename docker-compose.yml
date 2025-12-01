@@ -62,12 +62,8 @@ services:
       - /usr/lib/python3/dist-packages/hailo_platform:/usr/lib/python3/dist-packages/hailo_platform
 
     command: python3 /root/ws/siyi_pose_node.py
-```
 
 ### 🚀 실행
 
-이제 **4.17.0** 파일을 **4.20.0**으로 인식하게 만들었으니 에러가 사라질 겁니다.
-
-```bash
-cd ~/ros2_ws
-docker compose up --build siyi_vision
+#cd ~/ros2_ws
+#docker compose up --build siyi_vision
