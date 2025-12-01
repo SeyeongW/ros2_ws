@@ -46,20 +46,20 @@ services:
       - /usr/local/lib:/host_local_lib:ro
       - /lib:/host_root_lib:ro  <-- [추가됨] /lib 폴더도 뒤집니다.
 
-    # [핵심] 1. /lib 까지 뒤져서 복사 2. GStreamer 캐시 삭제 3. 검증(inspect)
+    # [핵심] 문법 오류 해결! cp -t 옵션과 + 종료 문자를 사용하여 백슬래시 문제 원천 차단
     command: >
       bash -c "
       echo 'Step 1: Cleaning GStreamer Cache...' &&
       rm -rf /root/.cache/gstreamer-1.0 &&
       
       echo 'Step 2: Searching and copying Hailo libraries...' &&
-      # /lib, /usr/lib, /usr/local/lib 전부 뒤져서 복사 (-v 옵션으로 복사되는거 보여줌)
-      find /host_root_lib /host_usr_lib /host_local_lib -name 'libhailort.so*' -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/ \; &&
-      find /host_root_lib /host_usr_lib /host_local_lib -name 'libgsthailometa.so*' -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/ \; &&
-      find /host_root_lib /host_usr_lib /host_local_lib -name 'libhailo_tracker.so*' -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/ \; &&
+      # -exec cp -t (타겟지정) {} + 문법 사용 -> 백슬래시 필요 없음, 더 안전함
+      find /host_root_lib /host_usr_lib /host_local_lib -name 'libhailort.so*' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/ {} + &&
+      find /host_root_lib /host_usr_lib /host_local_lib -name 'libgsthailometa.so*' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/ {} + &&
+      find /host_root_lib /host_usr_lib /host_local_lib -name 'libhailo_tracker.so*' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/ {} + &&
       
-      find /host_root_lib /host_usr_lib /host_local_lib -name 'libgsthailo.so' -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ \; &&
-      find /host_root_lib /host_usr_lib /host_local_lib -name 'libgsthailotools.so' -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ \; &&
+      find /host_root_lib /host_usr_lib /host_local_lib -name 'libgsthailo.so' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ {} + &&
+      find /host_root_lib /host_usr_lib /host_local_lib -name 'libgsthailotools.so' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ {} + &&
       
       echo 'Step 3: Creating symlinks & Updating Linker...' &&
       ln -sf /usr/lib/aarch64-linux-gnu/libhailort.so /usr/lib/aarch64-linux-gnu/libhailort.so.4.20.0 &&
@@ -71,6 +71,3 @@ services:
       echo 'Step 5: Starting Node...' &&
       python3 /root/ws/siyi_pose_node.py
       "
-
-#cd ~/ros2_ws
-#docker compose up --build siyi_vision
