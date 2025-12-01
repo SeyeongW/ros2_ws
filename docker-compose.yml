@@ -44,35 +44,50 @@ services:
       # (2) 시스템 라이브러리 경로 (통째로 마운트)
       - /usr/lib:/host_usr_lib:ro
 
-    # [실행 명령] 주석을 모두 제거하여 문법 오류 해결
-    command: >
-      bash -c "
-      echo 'Step 1: Cleaning Environment...' &&
-      rm -rf /root/.cache/gstreamer-1.0 &&
-      
-      echo 'Step 2: Copying Libraries...' &&
-      cp -fpv /host_usr_lib/libhailort.so* /usr/lib/aarch64-linux-gnu/ &&
-      cp -fpv /host_usr_lib/aarch64-linux-gnu/libgsthailometa.so* /usr/lib/aarch64-linux-gnu/ || true &&
-      cp -fpv /host_usr_lib/aarch64-linux-gnu/libhailo_tracker.so* /usr/lib/aarch64-linux-gnu/ || true &&
-      cp -fpv /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
-      cp -fpv /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
-      
-      echo 'Step 3: DIAGNOSIS - Checking /hailo_ws content...' &&
-      ls -R /hailo_ws || echo 'ERROR: /hailo_ws is missing or empty!' &&
-      
-      echo 'Step 4: Finding and Fixing Model Permissions...' &&
-      FOUND_HEF=\$(find /hailo_ws -name 'yolov8m_pose.hef' | head -n 1) &&
-      if [ -z \"\$FOUND_HEF\" ]; then echo 'CRITICAL ERROR: HEF file not found in /hailo_ws!'; exit 1; fi &&
-      echo \"Found HEF at: \$FOUND_HEF\" &&
-      cp -v \"\$FOUND_HEF\" /root/model.hef &&
-      chmod 644 /root/model.hef &&
-      
-      echo 'Step 5: Refreshing Linker...' &&
-      ldconfig &&
-      
-      echo 'Step 6: Inspecting Hailonet...' &&
-      gst-inspect-1.0 hailonet && 
-      
-      echo 'Step 7: Starting Node...' &&
-      python3 /root/ws/siyi_pose_node.py --ros-args -p hef_path:=/root/model.hef
-      "
+    # [핵심 변경] 리스트 문법과 | (파이프)를 사용하여 쉘 스크립트를 안전하게 작성
+    command:
+      - bash
+      - -c
+      - |
+        set -e  # 에러 발생 시 즉시 중단
+
+        echo "Step 1: Cleaning Environment..."
+        rm -rf /root/.cache/gstreamer-1.0
+
+        echo "Step 2: Copying Libraries from /host_usr_lib..."
+        # 1. 런타임 라이브러리 (호스트 /usr/lib)
+        cp -fpv /host_usr_lib/libhailort.so* /usr/lib/aarch64-linux-gnu/
+        
+        # 2. 의존성 라이브러리 (호스트 /usr/lib/aarch64-linux-gnu)
+        # (없어도 에러 안 나게 처리)
+        cp -fpv /host_usr_lib/aarch64-linux-gnu/libgsthailometa.so* /usr/lib/aarch64-linux-gnu/ || true
+        cp -fpv /host_usr_lib/aarch64-linux-gnu/libhailo_tracker.so* /usr/lib/aarch64-linux-gnu/ || true
+        
+        # 3. GStreamer 플러그인 (호스트 /usr/lib/aarch64-linux-gnu/gstreamer-1.0)
+        cp -fpv /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/
+        cp -fpv /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/
+
+        echo "Step 3: DIAGNOSIS - Checking /hailo_ws content..."
+        ls -R /hailo_ws || echo "ERROR: /hailo_ws is missing or empty!"
+
+        echo "Step 4: Finding and Fixing Model Permissions..."
+        # $$는 docker-compose 변수가 아니라 쉘 변수임을 의미함
+        FOUND_HEF=$$(find /hailo_ws -name "yolov8m_pose.hef" | head -n 1)
+        
+        if [ -z "$$FOUND_HEF" ]; then
+            echo "CRITICAL ERROR: HEF file not found in /hailo_ws!"
+            exit 1
+        fi
+        
+        echo "Found HEF at: $$FOUND_HEF"
+        cp -v "$$FOUND_HEF" /root/model.hef
+        chmod 644 /root/model.hef
+
+        echo "Step 5: Refreshing Linker..."
+        ldconfig
+
+        echo "Step 6: Inspecting Hailonet..."
+        gst-inspect-1.0 hailonet
+
+        echo "Step 7: Starting Node..."
+        python3 /root/ws/siyi_pose_node.py --ros-args -p hef_path:=/root/model.hef
