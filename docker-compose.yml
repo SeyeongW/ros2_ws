@@ -44,7 +44,7 @@ services:
       # (2) 시스템 라이브러리 경로 (통째로 마운트)
       - /usr/lib:/host_usr_lib:ro
 
-    # [실행 명령] 디렉토리 내용을 눈으로 확인하고(ls), 검색해서(find) 복사합니다.
+    # [실행 명령] 주석을 모두 제거하여 문법 오류 해결
     command: >
       bash -c "
       echo 'Step 1: Cleaning Environment...' &&
@@ -58,11 +58,9 @@ services:
       cp -fpv /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
       
       echo 'Step 3: DIAGNOSIS - Checking /hailo_ws content...' &&
-      # 여기서 로그에 파일 목록이 뜨는지 확인하세요! 만약 아무것도 안 뜨면 마운트 실패입니다.
       ls -R /hailo_ws || echo 'ERROR: /hailo_ws is missing or empty!' &&
       
       echo 'Step 4: Finding and Fixing Model Permissions...' &&
-      # 경로를 직접 지정하지 않고, 파일을 찾아서 복사합니다.
       FOUND_HEF=\$(find /hailo_ws -name 'yolov8m_pose.hef' | head -n 1) &&
       if [ -z \"\$FOUND_HEF\" ]; then echo 'CRITICAL ERROR: HEF file not found in /hailo_ws!'; exit 1; fi &&
       echo \"Found HEF at: \$FOUND_HEF\" &&
