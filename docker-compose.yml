@@ -71,11 +71,21 @@ services:
         cp -fp /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/
 
         echo "2. Preparing AI Model..."
-        # 모델 파일 찾아서 복사
-        FOUND_HEF=$$(find /hailo_ws -name "yolov8m_pose.hef" | head -n 1)
+        
+        # [디버그] 마운트된 폴더 내용을 직접 확인합니다.
+        echo "   [DEBUG] Listing contents of /hailo_ws to verify mount:"
+        ls -R /hailo_ws || echo "   [ERROR] Cannot list /hailo_ws (Mount failed?)"
+
+        # 파일 찾기 (이름을 좀 더 유연하게 검색: *pose*.hef)
+        FOUND_HEF=$$(find /hailo_ws -name "*pose*.hef" | head -n 1)
         
         if [ -z "$$FOUND_HEF" ]; then
-            echo "CRITICAL ERROR: HEF file not found in /hailo_ws!"
+            echo "   [Retry] Searching for ANY .hef file..."
+            FOUND_HEF=$$(find /hailo_ws -name "*.hef" | head -n 1)
+        fi
+
+        if [ -z "$$FOUND_HEF" ]; then
+            echo "CRITICAL ERROR: No HEF file found in /hailo_ws!"
             exit 1
         fi
         
