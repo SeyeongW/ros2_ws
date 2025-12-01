@@ -37,26 +37,30 @@ services:
     
     volumes:
       - /dev:/dev
-      # (1) 모델 파일 원본 경로 (읽기 전용으로 마운트)
+      # (1) 모델 파일 원본 경로
       - /home/sw/hailo-rpi5-examples:/hailo_ws:ro
       - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
       
-      # (2) 시스템 라이브러리 경로 마운트
-      - /usr/lib/aarch64-linux-gnu:/host_libs:ro
-      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0:/host_gst_plugins:ro
+      # (2) [핵심 수정] 파일을 다 찾기 위해 상위 폴더인 /usr/lib 전체를 마운트합니다.
+      - /usr/lib:/host_libs:ro
 
-    # [실행 명령] 주석(#)을 제거하여 문법 오류 해결
+    # [실행 명령] 파일 위치에 맞춰 정확하게 복사합니다.
     command: >
       bash -c "
       echo 'Step 1: Cleaning Environment...' &&
       rm -rf /root/.cache/gstreamer-1.0 &&
       
       echo 'Step 2: Copying System Libraries...' &&
+      # 1. 런타임 라이브러리 (/usr/lib 에 있음)
       cp -fpv /host_libs/libhailort.so* /usr/lib/aarch64-linux-gnu/ &&
-      cp -fpv /host_libs/libgsthailometa.so* /usr/lib/aarch64-linux-gnu/ &&
-      cp -fpv /host_libs/libhailo_tracker.so* /usr/lib/aarch64-linux-gnu/ &&
-      cp -fpv /host_gst_plugins/libgsthailo.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
-      cp -fpv /host_gst_plugins/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
+      
+      # 2. 기타 의존성 라이브러리 (/usr/lib/aarch64-linux-gnu 에 있음)
+      cp -fpv /host_libs/aarch64-linux-gnu/libgsthailometa.so* /usr/lib/aarch64-linux-gnu/ &&
+      cp -fpv /host_libs/aarch64-linux-gnu/libhailo_tracker.so* /usr/lib/aarch64-linux-gnu/ &&
+      
+      # 3. GStreamer 플러그인 (/usr/lib/aarch64-linux-gnu/gstreamer-1.0 에 있음)
+      cp -fpv /host_libs/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
+      cp -fpv /host_libs/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
       
       echo 'Step 3: Fixing Model Permissions...' &&
       cp -v /hailo_ws/resources/models/hailo8/yolov8m_pose.hef /root/model.hef &&
