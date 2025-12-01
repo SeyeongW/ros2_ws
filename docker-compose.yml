@@ -45,58 +45,84 @@ services:
       
       # (3) 시스템 라이브러리 경로 (복사용)
       - /usr/lib:/host_usr_lib:ro
+      - /usr/local/lib:/host_local_lib:ro
 
-      # (4) [핵심] 후처리 라이브러리(.so)가 있는 폴더 마운트
+      # (4) [필수] 후처리 라이브러리(.so) 마운트
       - /home/sw/hailo-rpi5-examples:/hailo_ws:ro
 
-    # [핵심] 의존성 자동 해결 스크립트 적용
+    # [핵심] 의존성 재귀 치료 스크립트 (Recursive Dependency Fixer)
     command:
       - bash
       - -c
       - |
         set -e
 
-        echo "--- Setting up Hailo Vision Node (Auto-Fix Mode) ---"
+        echo "--- Setting up Hailo Vision Node (Deep Fix Mode) ---"
         rm -rf /root/.cache/gstreamer-1.0
 
         # ---------------------------------------------------------
-        # 1. 기본 Hailo 라이브러리 복사
+        # 1. Hailo 핵심 라이브러리 복사
         # ---------------------------------------------------------
-        echo "1. Copying Base Hailo Libraries..."
-        find /host_usr_lib -name "*hailo*.so*" -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/ \;
-        cp -fpv /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/
-        cp -fpv /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/
-
-        # ---------------------------------------------------------
-        # 2. 의존성 자동 치료 (Missing Libs Fixer)
-        # ---------------------------------------------------------
-        echo "2. Checking & Fixing Missing Dependencies..."
+        echo "1. Copying Hailo Core Libraries..."
+        # hailo 이름 들어간 건 다 가져옵니다.
+        find /host_usr_lib /host_local_lib -name "*hailo*.so*" -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/ \;
         
-        # 검사 대상: GStreamer 플러그인 & 후처리 라이브러리
-        TARGET_LIBS="/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /hailo_ws/resources/so/libyolov8pose_postprocess.so"
+        # GStreamer 플러그인 위치 확보
+        mkdir -p /usr/lib/aarch64-linux-gnu/gstreamer-1.0
+        cp -fp /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/
+        cp -fp /host_usr_lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/
 
-        for target in $TARGET_LIBS; do
-            if [ -f "$target" ]; then
-                echo "   Scanning $target..."
-                # ldd로 'not found'인 라이브러리 목록 추출
-                MISSING=$(ldd "$target" | grep "not found" | awk '{print $1}')
-                
-                for lib in $MISSING; do
-                    echo "   [FIX] Missing dependency found: $lib -> Searching host..."
-                    # 호스트에서 찾아서 복사 (심볼릭 링크 원본까지 복사하기 위해 -L 사용)
-                    find /host_usr_lib -name "$lib" -exec cp -Lnv {} /usr/lib/aarch64-linux-gnu/ \;
-                done
-            else
-                echo "   [WARN] Target $target not found inside container!"
+        # ---------------------------------------------------------
+        # 2. OpenCV 등 필수 라이브러리 복사 (후처리 파일용)
+        # ---------------------------------------------------------
+        echo "2. Copying Host OpenCV Libraries..."
+        # 후처리 파일은 호스트의 OpenCV를 씁니다. 이것도 가져와야 합니다.
+        find /host_usr_lib -name "libopencv*.so*" -exec cp -fpn {} /usr/lib/aarch64-linux-gnu/ \;
+
+        # ---------------------------------------------------------
+        # 3. 재귀적 의존성 치료 (Recursive Fixer)
+        # ---------------------------------------------------------
+        echo "3. Running Recursive Dependency Fixer..."
+        
+        # 검사할 타겟 파일들
+        TARGETS="/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so /hailo_ws/resources/so/libyolov8pose_postprocess.so"
+
+        # 3번 반복해서 꼬리에 꼬리를 무는 의존성을 해결합니다.
+        for i in 1 2 3; do
+            echo "   [Pass $i] Checking dependencies..."
+            MISSING_FOUND=0
+            
+            for target in $TARGETS; do
+                if [ -f "$target" ]; then
+                    # ldd로 'not found' 찾기
+                    MISSING_LIST=$(ldd "$target" 2>/dev/null | grep "not found" | awk '{print $1}')
+                    
+                    for lib in $MISSING_LIST; do
+                        echo "      -> Missing: $lib. Searching host..."
+                        # 호스트에서 찾아서 복사 (-L: 원본복사, -n: 덮어쓰기방지)
+                        FOUND_PATH=$(find /host_usr_lib /host_local_lib -name "$lib" -print -quit)
+                        if [ ! -z "$FOUND_PATH" ]; then
+                            cp -Lnv "$FOUND_PATH" /usr/lib/aarch64-linux-gnu/
+                            MISSING_FOUND=1
+                        else
+                            echo "      [WARN] Could not find $lib on host!"
+                        fi
+                    done
+                fi
+            done
+            
+            # 새로 복사된 파일들을 시스템에 인식시킴
+            ldconfig
+            
+            if [ "$MISSING_FOUND" -eq 0 ]; then
+                echo "   [Success] No more missing dependencies found."
+                break
             fi
         done
 
         # ---------------------------------------------------------
-        # 3. 시스템 갱신 및 실행
+        # 4. 실행
         # ---------------------------------------------------------
-        echo "3. Refreshing System Linker..."
-        ldconfig
-
         echo "4. Verifying Setup..."
         ls -l /root/model.hef
         
