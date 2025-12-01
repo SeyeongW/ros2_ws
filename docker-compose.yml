@@ -28,7 +28,7 @@ services:
     privileged: true
     
     environment:
-      # 플러그인과 라이브러리 경로 명시
+      - GST_DEBUG=2
       - GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
       - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/lib
 
@@ -37,29 +37,44 @@ services:
     
     volumes:
       - /dev:/dev
-      - /home/sw/hailo-rpi5-examples:/hailo_ws
+      # (1) 모델 파일 원본 경로 (읽기 전용으로 마운트)
+      - /home/sw/hailo-rpi5-examples:/hailo_ws:ro
       - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
       
-      # [핵심] 사용자가 직접 확인해준 경로를 마운트합니다.
-      
-      # 1. 런타임 라이브러리 (확인된 위치: /usr/lib)
-      - /usr/lib/libhailort.so.4.20.0:/usr/lib/aarch64-linux-gnu/libhailort.so.4.20.0
-      # 심볼릭 링크용으로도 연결
-      - /usr/lib/libhailort.so.4.20.0:/usr/lib/aarch64-linux-gnu/libhailort.so
-      
-      # 2. GStreamer 플러그인 (확인된 위치: /usr/lib/aarch64-linux-gnu/gstreamer-1.0)
-      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so:/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so
+      # (2) 시스템 라이브러리 경로 마운트
+      - /usr/lib/aarch64-linux-gnu:/host_libs:ro
+      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0:/host_gst_plugins:ro
 
-    # [실행 명령] 파일 연결은 volumes에서 했으니, 여기서는 링크 갱신과 검사만 합니다.
+    # [실행 명령] 모든 의존성을 내부로 복사하여 '완벽한 환경'을 만듭니다.
     command: >
       bash -c "
-      echo 'Step 1: Refreshing Linker...' &&
+      echo 'Step 1: Cleaning Environment...' &&
+      rm -rf /root/.cache/gstreamer-1.0 &&
+      
+      echo 'Step 2: Copying System Libraries...' &&
+      # 런타임 & 메타 라이브러리
+      cp -fpv /host_libs/libhailort.so* /usr/lib/aarch64-linux-gnu/ &&
+      cp -fpv /host_libs/libgsthailometa.so* /usr/lib/aarch64-linux-gnu/ &&
+      
+      # [핵심 1] Tracker 라이브러리 복사 (hailofilter 에러 해결)
+      cp -fpv /host_libs/libhailo_tracker.so* /usr/lib/aarch64-linux-gnu/ &&
+      
+      # GStreamer 플러그인 복사
+      cp -fpv /host_gst_plugins/libgsthailo.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
+      cp -fpv /host_gst_plugins/libgsthailotools.so /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
+      
+      echo 'Step 3: Fixing Model Permissions...' &&
+      # [핵심 2] 모델 파일을 도커 내부(/root)로 복사하여 권한 에러(13) 해결
+      cp -v /hailo_ws/resources/models/hailo8/yolov8m_pose.hef /root/model.hef &&
+      chmod 644 /root/model.hef &&
+      
+      echo 'Step 4: Refreshing Linker...' &&
       ldconfig &&
       
-      echo 'Step 2: Inspecting Hailonet...' &&
-      # 여기서 정보가 뜨면 성공입니다.
-      gst-inspect-1.0 hailonet && 
+      echo 'Step 5: Inspecting Hailofilter...' &&
+      gst-inspect-1.0 hailofilter && 
       
-      echo 'Step 3: Starting Node...' &&
-      python3 /root/ws/siyi_pose_node.py
+      echo 'Step 6: Starting Node...' &&
+      # 복사한 모델 파일 경로(/root/model.hef)를 파라미터로 넘겨줍니다.
+      python3 /root/ws/siyi_pose_node.py --ros-args -p hef_path:=/root/model.hef
       "
