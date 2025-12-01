@@ -37,33 +37,32 @@ services:
     
     volumes:
       - /dev:/dev
-      
       # (1) 모델 파일 및 코드
       - /home/sw/hailo-rpi5-examples:/hailo_ws
       - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
       
-      # (2) GStreamer 플러그인
-      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so:/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailo.so
-      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so:/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgsthailotools.so
+      # (2) [핵심] 호스트의 라이브러리 폴더를 통째로 임시 경로(/host_libs)에 마운트
+      # 파일 하나하나 지정하다가 오타 나는 것을 방지합니다.
+      - /usr/lib/aarch64-linux-gnu:/host_libs
+      - /usr/lib/aarch64-linux-gnu/gstreamer-1.0:/host_gst_libs
 
-      # (3) [핵심 수정] 런타임 라이브러리 (버전 속이기!)
-      # 호스트의 4.17.0 파일을 -> 도커에게는 4.20.0 이라고 거짓말하고 넣어줍니다.
-      - /usr/lib/aarch64-linux-gnu/libhailort.so.4.17.0:/usr/lib/aarch64-linux-gnu/libhailort.so.4.20.0
-      # 심볼릭 링크도 연결
-      - /usr/lib/aarch64-linux-gnu/libhailort.so.4.17.0:/usr/lib/aarch64-linux-gnu/libhailort.so
-
-      # (4) [추가됨] 메타 라이브러리 (사용자가 찾은 파일)
-      # 호스트의 3.31.0 파일을 -> 도커에게는 필요한 이름(.so.3)으로 넣어줍니다.
-      - /usr/lib/aarch64-linux-gnu/libgsthailometa.so.3.31.0:/usr/lib/aarch64-linux-gnu/libgsthailometa.so.3
-      - /usr/lib/aarch64-linux-gnu/libgsthailometa.so.3.31.0:/usr/lib/aarch64-linux-gnu/libgsthailometa.so
-
-      # (5) 파이썬 패키지
+      # (3) 파이썬 패키지
       - /usr/lib/python3/dist-packages/hailort:/usr/lib/python3/dist-packages/hailort
       - /usr/lib/python3/dist-packages/hailo_platform:/usr/lib/python3/dist-packages/hailo_platform
 
-    command: python3 /root/ws/siyi_pose_node.py
-
-### 🚀 실행
+    # [핵심] 실행 시 필요한 파일만 복사하고, 버전 이름을 속이는 스크립트 실행
+    command: >
+      bash -c "
+      echo 'Setting up Hailo libraries...' &&
+      cp -fp /host_libs/libhailort.so* /usr/lib/aarch64-linux-gnu/ &&
+      cp -fp /host_libs/libgsthailometa.so* /usr/lib/aarch64-linux-gnu/ &&
+      cp -fp /host_libs/libhailo_tracker.so* /usr/lib/aarch64-linux-gnu/ &&
+      cp -fp /host_gst_libs/libgsthailo* /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ &&
+      echo 'Creating version symlink 4.20.0 -> host version...' &&
+      ln -sf /usr/lib/aarch64-linux-gnu/libhailort.so /usr/lib/aarch64-linux-gnu/libhailort.so.4.20.0 &&
+      echo 'Starting Node...' &&
+      python3 /root/ws/siyi_pose_node.py
+      "
 
 #cd ~/ros2_ws
 #docker compose up --build siyi_vision
