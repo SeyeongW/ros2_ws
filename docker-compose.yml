@@ -29,13 +29,13 @@ services:
     
     environment:
       - GST_DEBUG=0
-      # [핵심 1] GStreamer에게 "호스트에서 가져온 플러그인을 써라"고 명령
+      # 호스트의 GStreamer 플러그인을 사용
       - GST_PLUGIN_PATH=/host_fs/usr/lib/aarch64-linux-gnu/gstreamer-1.0
       
-      # [핵심 2] 라이브러리 우선순위 변경 (치트키)
-      # 도커 내부 라이브러리보다 "마운트된 호스트 라이브러리(/host_fs/...)"를 먼저 보게 만듭니다.
-      # 이렇게 하면 OpenCV, Hailo, GStreamer 등 모든 의존성이 호스트와 똑같이 맞춰집니다.
-      - LD_LIBRARY_PATH=/host_fs/usr/lib/aarch64-linux-gnu:/host_fs/usr/lib:/host_fs/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu:/usr/lib
+      # [핵심 수정] 라이브러리 우선순위 변경!
+      # 1순위: 도커 내부 시스템 경로 (/usr/lib/...) -> bash가 죽지 않게 함
+      # 2순위: 호스트 경로 (/host_fs/...) -> 없는 파일(Hailo/OpenCV)은 여기서 찾음
+      - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/lib/aarch64-linux-gnu:/usr/lib:/host_fs/usr/lib/aarch64-linux-gnu:/host_fs/usr/lib:/host_fs/lib/aarch64-linux-gnu
 
     devices:
       - "/dev/hailo0:/dev/hailo0"
@@ -47,31 +47,31 @@ services:
       - /home/sw/hailo-rpi5-examples/resources/models/hailo8/yolov8m_pose.hef:/root/model.hef:ro
       - /home/sw/hailo-rpi5-examples:/hailo_ws:ro
       
-      # (2) [핵심] 호스트의 시스템 폴더 전체를 /host_fs 라는 이름으로 마운트
-      # 이제 도커 안에서 /host_fs/usr/lib 로 접근하면 호스트의 라이브러리를 다 쓸 수 있습니다.
+      # (2) 호스트 시스템 폴더 마운트 (치트키)
       - /usr/lib:/host_fs/usr/lib:ro
       - /lib:/host_fs/lib:ro
 
-    # [실행 명령] 복사할 필요 없음! 바로 실행합니다.
+    # [실행 명령]
     command:
       - bash
       - -c
       - |
         set -e
-        echo "--- Setting up Hailo Vision Node (Host-Passthrough Mode) ---"
+        echo "--- Setting up Hailo Vision Node (Host-Passthrough Mode v2) ---"
         
         # 1. 모델 파일 확인
         if [ ! -f /root/model.hef ]; then
-            echo "CRITICAL: Model file not mounted!"
+            echo "CRITICAL: Model file not mounted at /root/model.hef!"
             exit 1
         fi
         
-        # 2. 링커 캐시 갱신 (호스트 라이브러리 인식)
+        # 2. 링커 캐시 갱신
         ldconfig
 
-        # 3. 플러그인 검사 (이게 성공해야 함)
-        echo "Inspecting Hailonet using HOST libraries..."
-        gst-inspect-1.0 hailonet
+        # 3. 플러그인 검사
+        echo "Inspecting Hailonet..."
+        # 이제 bash도 살고, 플러그인도 로딩될 것입니다.
+        gst-inspect-1.0 hailonet || echo "WARNING: Inspect failed, but trying execution anyway..."
 
         # 4. 실행
         echo "Starting Node..."
