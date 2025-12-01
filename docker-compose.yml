@@ -29,7 +29,6 @@ services:
     
     environment:
       # [최종] 디버그 로그 끔 (조용하게 실행)
-      # 문제가 생기면 다시 2 or 3으로 올려서 확인 가능
       - GST_DEBUG=0
       - GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
       - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/lib
@@ -46,7 +45,7 @@ services:
       # (2) 시스템 라이브러리 경로 (통째로 마운트)
       - /usr/lib:/host_usr_lib:ro
 
-    # [최종] 안정화된 실행 스크립트
+    # [최종] 안정화된 실행 스크립트 (목록 출력 삭제)
     command:
       - bash
       - -c
@@ -72,10 +71,6 @@ services:
 
         echo "2. Preparing AI Model..."
         
-        # [디버그] 마운트된 폴더 내용을 직접 확인합니다.
-        echo "   [DEBUG] Listing contents of /hailo_ws to verify mount:"
-        ls -R /hailo_ws || echo "   [ERROR] Cannot list /hailo_ws (Mount failed?)"
-
         # 파일 찾기 (이름을 좀 더 유연하게 검색: *pose*.hef)
         FOUND_HEF=$$(find /hailo_ws -name "*pose*.hef" | head -n 1)
         
