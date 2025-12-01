@@ -1,25 +1,40 @@
 version: '3.8'
 
 services:
+  # 1. 비행 제어 노드 (로컬 폴더 mission 빌드)
   vtol_mission:
     build:
-      context: .
-    platform: linux/arm64
-    image: seyeongw/vtol_mission:latest
+      context: ./mission
+    image: vtol_mission:local
     container_name: vtol_mission
     restart: unless-stopped
     network_mode: "host"
-
+    privileged: true
     devices:
       - "/dev/ttyAMA0:/dev/serial0"
-
-    group_add:
-      - "dialout"
-
     command: >
      bash -c "source /opt/ros/humble/setup.bash &&
      source /ros2_ws/install/setup.bash &&
-     ros2 launch vtol_mission takeoff.launch.py \
-     fcu_url:=/dev/serial0:57600 \
-     system_id:=255 \
-     component_id:=240"
+     ros2 launch vtol_mission takeoff.launch.py fcu_url:=/dev/serial0:57600 system_id:=255 component_id:=240"
+
+  # 2. AI 영상 노드 (로컬 폴더 vision 빌드)
+  siyi_vision:
+    build:
+      context: ./vision
+    image: siyi_vision:local
+    container_name: siyi_vision
+    restart: unless-stopped
+    network_mode: "host"
+    privileged: true
+    
+    # 하드웨어 및 파일 연결
+    devices:
+      - "/dev/hailo0:/dev/hailo0"
+    volumes:
+      - /dev:/dev
+      # (중요 1) Hailo 모델 파일 연결
+      - /home/sw/hailo-rpi5-examples:/hailo_ws
+      # (중요 2) 개발 꿀팁: 코드를 수정하면 빌드 없이 바로 반영되게 연결!
+      - ./vision/siyi_pose_node.py:/root/ws/siyi_pose_node.py
+    
+    command: python3 /root/ws/siyi_pose_node.py
