@@ -28,8 +28,9 @@ services:
     privileged: true
     
     environment:
-      # [수정됨] 파이썬 패키지 경로(PYTHONPATH) 삭제! (충돌 원인 제거)
+      # GStreamer 플러그인 경로
       - GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
+      # 라이브러리 경로
       - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/lib
 
     devices:
@@ -41,33 +42,42 @@ services:
       - /home/sw/hailo-rpi5-examples:/hailo_ws
       - ./vision_project/siyi_pose_node.py:/root/ws/siyi_pose_node.py
       
-      # (2) 시스템 라이브러리 검색용 (탐색 범위 확장)
+      # (2) 호스트의 시스템 라이브러리 폴더를 검색용으로 마운트 (읽기 전용)
+      # /usr/lib 전체를 /host_usr_lib로 연결해서 안에서 찾습니다.
       - /usr/lib:/host_usr_lib:ro
       - /usr/local/lib:/host_local_lib:ro
-      - /lib:/host_root_lib:ro  <-- [추가됨] /lib 폴더도 뒤집니다.
 
-    # [핵심] 문법 오류 해결! cp -t 옵션과 + 종료 문자를 사용하여 백슬래시 문제 원천 차단
+      # [중요] 파이썬 패키지 마운트 삭제! (Numpy 충돌 원인 제거)
+
+    # [핵심] 호스트에 있는 4.20.0 파일들을 찾아서 도커 안으로 복사
     command: >
       bash -c "
-      echo 'Step 1: Cleaning GStreamer Cache...' &&
-      rm -rf /root/.cache/gstreamer-1.0 &&
+      echo 'Step 1: Copying Hailo 4.20.0 libraries...' &&
       
-      echo 'Step 2: Searching and copying Hailo libraries...' &&
-      # -exec cp -t (타겟지정) {} + 문법 사용 -> 백슬래시 필요 없음, 더 안전함
-      find /host_root_lib /host_usr_lib /host_local_lib -name 'libhailort.so*' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/ {} + &&
-      find /host_root_lib /host_usr_lib /host_local_lib -name 'libgsthailometa.so*' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/ {} + &&
-      find /host_root_lib /host_usr_lib /host_local_lib -name 'libhailo_tracker.so*' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/ {} + &&
+      # 1. 런타임 라이브러리 (4.20.0) 찾아서 복사
+      find /host_usr_lib /host_local_lib -name 'libhailort.so.4.20.0' -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/ \; &&
+      # 심볼릭 링크 생성 (libhailort.so -> 4.20.0)
+      ln -sf /usr/lib/aarch64-linux-gnu/libhailort.so.4.20.0 /usr/lib/aarch64-linux-gnu/libhailort.so &&
+
+      # 2. 메타 라이브러리 복사
+      find /host_usr_lib /host_local_lib -name 'libgsthailometa.so*' -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/ \; &&
       
-      find /host_root_lib /host_usr_lib /host_local_lib -name 'libgsthailo.so' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ {} + &&
-      find /host_root_lib /host_usr_lib /host_local_lib -name 'libgsthailotools.so' -exec cp -fpv -t /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ {} + &&
+      # 3. 트래커 라이브러리 복사
+      find /host_usr_lib /host_local_lib -name 'libhailo_tracker.so*' -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/ \; &&
       
-      echo 'Step 3: Creating symlinks & Updating Linker...' &&
-      ln -sf /usr/lib/aarch64-linux-gnu/libhailort.so /usr/lib/aarch64-linux-gnu/libhailort.so.4.20.0 &&
+      # 4. GStreamer 플러그인 복사
+      find /host_usr_lib /host_local_lib -name 'libgsthailo.so' -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ \; &&
+      find /host_usr_lib /host_local_lib -name 'libgsthailotools.so' -exec cp -fpv {} /usr/lib/aarch64-linux-gnu/gstreamer-1.0/ \; &&
+      
+      echo 'Step 2: Refreshing Linker...' &&
       ldconfig &&
       
-      echo 'Step 4: Verifying Plugin...' &&
+      echo 'Step 3: Checking Hailonet...' &&
       gst-inspect-1.0 hailonet && 
       
-      echo 'Step 5: Starting Node...' &&
+      echo 'Step 4: Starting Node...' &&
       python3 /root/ws/siyi_pose_node.py
       "
+
+#cd ~/ros2_ws
+#docker compose up --build siyi_vision
